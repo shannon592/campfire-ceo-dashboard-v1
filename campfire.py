@@ -25,7 +25,9 @@ from urllib.parse import urlencode
 import jwt
 import requests
 
+import balance_sheet
 import db
+from balance_sheet import ACCOUNT_RE, Entry
 from metrics import month_labels
 
 log = logging.getLogger(__name__)
@@ -291,6 +293,74 @@ def collect_rows(report) -> dict[str, dict[str, float]]:
     return rows
 
 
+def collect_entries(report) -> list[Entry]:
+    """Every labelled row in document order, remembering its nearest labelled ancestor."""
+    columns = _find_columns(report)
+    entries: list[Entry] = []
+
+    def walk(node, parent):
+        if isinstance(node, dict):
+            label = next((node[k] for k in _LABEL_KEYS if isinstance(node.get(k), str)), None)
+            here = parent
+            if label:
+                entries.append(Entry(label.strip(), _values_by_period(node, columns), parent))
+                here = len(entries) - 1
+            for v in node.values():
+                if isinstance(v, (dict, list)):
+                    walk(v, here)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item, parent)
+
+    walk(report, None)
+    return entries
+
+
+def account_types(customer_id: str) -> dict[int, str]:
+    """Account number -> "type subtype" text from the accounts endpoint (accounts:read).
+
+    Best effort: if the endpoint or its fields differ, classification falls back
+    to account-number ranges.
+    """
+    for path in ("/coa/api/v1/account", "/coa/api/account"):
+        try:
+            items = api_list(customer_id, path)
+        except (CampfireError, requests.RequestException, ValueError) as exc:
+            log.info("Accounts endpoint %s unavailable: %s", path, exc)
+            continue
+        types: dict[int, str] = {}
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            raw_num = it.get("number") or it.get("account_number") or it.get("code")
+            if raw_num is None:
+                m = ACCOUNT_RE.match(str(it.get("name") or ""))
+                raw_num = m.group(1) if m else None
+            try:
+                number = int(str(raw_num).split(".")[0])
+            except (TypeError, ValueError):
+                continue
+            parts = []
+            for key in ("account_type", "type", "account_subtype", "subtype", "detail_type", "classification"):
+                val = it.get(key)
+                if isinstance(val, dict):
+                    val = val.get("name") or val.get("label") or val.get("value")
+                if isinstance(val, str) and val.strip():
+                    parts.append(val.strip())
+            if parts:
+                types[number] = " ".join(parts)
+        if types:
+            return types
+    return {}
+
+
+def pick_exact(rows: dict[str, dict[str, float]], *candidates: str) -> dict[str, float] | None:
+    for cand in candidates:
+        if cand in rows:
+            return rows[cand]
+    return None
+
+
 def pick(rows: dict[str, dict[str, float]], *candidates: str) -> dict[str, float] | None:
     for cand in candidates:
         if cand in rows:
@@ -361,7 +431,8 @@ def build_live_dataset(customer_id: str, today: date | None = None) -> dict:
     window = {"start_date": start, "end_date": end, "cadence": "monthly"}
 
     income = collect_rows(api_get(customer_id, "/ca/api/get_income_statement", window))
-    balance = collect_rows(api_get(customer_id, "/ca/api/get_balance_sheet", window))
+    balance_report = api_get(customer_id, "/ca/api/get_balance_sheet", window)
+    balance = collect_rows(balance_report)
 
     revenue = _series(pick(income, "total revenue", "total income", "revenue", "income"), months)
     cogs = _series(pick(income, "total cost of goods sold", "total cost of revenue",
@@ -369,10 +440,14 @@ def build_live_dataset(customer_id: str, today: date | None = None) -> dict:
     opex = _series(pick(income, "total operating expenses", "total expenses", "operating expenses",
                         "expenses"), months)
     net_income = _series(pick(income, "net income", "net profit", "net loss"), months)
-    cash = _series(pick(balance, "total cash and cash equivalents", "cash and cash equivalents",
-                        "total bank accounts", "total cash", "cash"), months)
-    current_assets = pick(balance, "total current assets", "current assets")
-    current_liabilities = pick(balance, "total current liabilities", "current liabilities")
+    cash = _series(pick_exact(balance, "total for cash and cash equivalents", "total for cash",
+                              "total for bank accounts", "total for bank")
+                   or pick(balance, "total cash and cash equivalents", "cash and cash equivalents",
+                           "total bank accounts", "total cash", "cash"), months)
+    # Exact match only: a leaf like "1350 - Other Current Assets" must not pass for the total.
+    current_assets = pick_exact(balance, "total current assets", "total for current assets", "current assets")
+    current_liabilities = pick_exact(balance, "total current liabilities", "total for current liabilities",
+                                     "current liabilities")
 
     for name, value in (("Revenue", revenue), ("Net income", net_income), ("Cash", cash)):
         if value is None:
@@ -400,6 +475,12 @@ def build_live_dataset(customer_id: str, today: date | None = None) -> dict:
 
     ca = current_assets.get(months[-1]) if current_assets else None
     cl = current_liabilities.get(months[-1]) if current_liabilities else None
+    if ca is None or cl is None:
+        # Campfire's balance sheet has no current/non-current subtotals: classify accounts.
+        wc = balance_sheet.classify(collect_entries(balance_report), months[-1],
+                                    account_types(customer_id))
+        if wc is not None:
+            ca, cl = wc.current_assets, wc.current_liabilities
     if ca is None or cl is None:
         warnings.append("Couldn't find current assets/liabilities; current ratio uses cash, AR and AP only.")
         ca = cash[-1] + sum(d["amount_due"] for d in invoices)

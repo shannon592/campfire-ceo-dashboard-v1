@@ -2,7 +2,6 @@
   "app": {
     "name": "CEO Dashboard",
     "tagline": "Revenue, profitability, cash runway and working capital at a glance",
-    "category": "other",
     "description": "A read-only executive dashboard built from your Campfire reports, invoices and bills. Shows revenue and margins, cash and runway, and receivables/payables aging. Read-only; makes no changes to the books.",
     "redirect_uris": ["<APP_URL>/callback"],
     "connect_url": "<APP_URL>/connect",

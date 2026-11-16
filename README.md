@@ -100,6 +100,23 @@ pip install pytest && pytest
   (`/coa/api/v1/invoice`) and bills (`/coa/api/v1/bill`). Results are cached per
   workspace for 5 minutes. Charts use Chart.js 4.4.1 (MIT), served from `static/`.
 
+## Current assets and liabilities
+
+Campfire's balance sheet has no "Total Current Assets/Liabilities" rows, so
+`balance_sheet.py` sums leaf accounts (`<number> - <name>`) itself, never the
+"Total for …" rows, and skips parent rows that only roll up their children. Each
+account is classified in this order:
+
+1. Name contains "non-current" or "long-term" → non-current.
+2. Account type/subtype from the accounts endpoint (`accounts:read`), when it says
+   current or non-current (e.g. "Other Current Asset", "Fixed Asset", "Long Term Liability").
+3. Number ranges: assets 1000–1499 and 1600–1699 current, 1500–1599 and 1700–1999
+   non-current; liabilities 2000–2699 current, 2700–2999 non-current.
+
+The Working Capital banner appears only if no current asset or current liability
+accounts can be classified. Mismatches against the report's "Total for Asset/Liability"
+rows are logged to Render's logs.
+
 ## Not yet verified against live Campfire
 
 These came from the guide and Campfire engineering notes but haven't been run
