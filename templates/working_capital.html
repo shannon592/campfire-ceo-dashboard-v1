@@ -1,0 +1,81 @@
+{% extends "_page.html" %}
+{% from "_macros.html" import tile %}
+{% block title %}Working Capital · CEO Dashboard{% endblock %}
+{% block heading %}Working Capital{% endblock %}
+{% block content %}
+{% set k = m.kpi %}
+
+<div class="tiles">
+  {{ tile("Working capital", k.working_capital | money, None, "Current assets − current liabilities") }}
+  {{ tile("Current ratio", (k.current_ratio | num(2)) ~ "×", None, (k.current_assets | money) ~ " / " ~ (k.current_liabilities | money)) }}
+  {{ tile("Days sales outstanding", (k.dso | num(0)) ~ " days", None, "Open AR ÷ last 90 days' revenue") }}
+  {{ tile("Days payables outstanding", (k.dpo | num(0)) ~ " days", None, "Open AP ÷ last 90 days' spend") }}
+  {{ tile("AR overdue", k.ar_overdue | money, None, (k.ar_overdue_pct | pct(0)) ~ " of " ~ (k.ar_total | money) ~ " open") }}
+  {{ tile("AP due within 30 days", k.ap_due_30 | money, None, (k.ap_total | money) ~ " open") }}
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Receivables aging</h2>
+    <p class="subtitle">Open invoice balances by days past due</p>
+    <div class="chart"><canvas id="ar" role="img" aria-label="Column chart of open receivables by aging bucket"></canvas></div>
+    <details class="table-view"><summary>Show as table</summary>
+      <table><tbody>{% for b, v in m.ar_aging.items() %}<tr><td>{{ b }}</td><td class="n">{{ v | money(False) }}</td></tr>{% endfor %}</tbody></table>
+    </details>
+  </section>
+  <section class="card">
+    <h2>Payables aging</h2>
+    <p class="subtitle">Open bill balances by days past due</p>
+    <div class="chart"><canvas id="ap" role="img" aria-label="Column chart of open payables by aging bucket"></canvas></div>
+    <details class="table-view"><summary>Show as table</summary>
+      <table><tbody>{% for b, v in m.ap_aging.items() %}<tr><td>{{ b }}</td><td class="n">{{ v | money(False) }}</td></tr>{% endfor %}</tbody></table>
+    </details>
+  </section>
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Largest overdue invoices</h2>
+    <p class="subtitle">Who owes us, oldest first</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Customer</th><th>Invoice</th><th>Due</th><th class="n">Days late</th><th class="n">Amount due</th></tr></thead>
+        <tbody>
+          {% set overdue = m.open_invoices | selectattr("days_overdue", "gt", 0) | list %}
+          {% for d in overdue[:10] %}
+            <tr><td>{{ d.party }}</td><td>{{ d.number }}</td><td>{{ d.due_date }}</td>
+              <td class="n"><span class="pill overdue">{{ d.days_overdue }}</span></td>
+              <td class="n">{{ d.amount_due | money(False) }}</td></tr>
+          {% else %}
+            <tr><td colspan="5">No overdue invoices.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Upcoming and overdue bills</h2>
+    <p class="subtitle">What we owe, by due date</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Vendor</th><th>Bill</th><th>Due</th><th class="n">Amount due</th></tr></thead>
+        <tbody>
+          {% for d in m.open_bills[:10] %}
+            <tr><td>{{ d.party }}</td><td>{{ d.number }}</td>
+              <td>{% if d.days_overdue > 0 %}<span class="pill overdue">{{ d.due_date }}</span>{% else %}{{ d.due_date }}{% endif %}</td>
+              <td class="n">{{ d.amount_due | money(False) }}</td></tr>
+          {% else %}
+            <tr><td colspan="4">No open bills.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  Dash.bar("ar", DASH.aging, [{ label: "Open AR", data: DASH.ar_aging, color: "--series-1" }], { categoryLabels: true });
+  Dash.bar("ap", DASH.aging, [{ label: "Open AP", data: DASH.ap_aging, color: "--series-2" }], { categoryLabels: true });
+</script>
+{% endblock %}

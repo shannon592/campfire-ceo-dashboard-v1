@@ -1,0 +1,28 @@
+{
+  "app": {
+    "name": "CEO Dashboard",
+    "tagline": "Revenue, profitability, cash runway and working capital at a glance",
+    "category": "other",
+    "description": "A read-only executive dashboard built from your Campfire reports, invoices and bills. Shows revenue and margins, cash and runway, and receivables/payables aging. Read-only; makes no changes to the books.",
+    "redirect_uris": ["<APP_URL>/callback"],
+    "connect_url": "<APP_URL>/connect",
+    "manage_url": "<APP_URL>/manage",
+    "allowed_scopes": ["reports:read", "accounts:read", "invoices:read", "bills:read"]
+  },
+  "allowed_domains": ["<APP_DOMAIN>"],
+  "navigation": [
+    {
+      "key": "ceo-dashboard",
+      "label": "CEO Dashboard",
+      "icon": "scale",
+      "url_template": "",
+      "is_active": true,
+      "items": [
+        {"key": "overview", "label": "Overview", "icon": "scale", "url_template": "<APP_URL>/frame/overview", "is_active": true},
+        {"key": "revenue", "label": "Revenue & Profitability", "icon": "scale", "url_template": "<APP_URL>/frame/revenue", "is_active": true},
+        {"key": "cash", "label": "Cash & Runway", "icon": "scale", "url_template": "<APP_URL>/frame/cash", "is_active": true},
+        {"key": "working-capital", "label": "Working Capital", "icon": "scale", "url_template": "<APP_URL>/frame/working-capital", "is_active": true}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+# Render blueprint for the Campfire CEO Dashboard.
+# Secrets are NOT stored here: values marked `sync: false` are entered by hand
+# on the Render service's Environment page after the first deploy.
+services:
+  - type: web
+    name: campfire-ceo-dashboard
+    runtime: python
+    plan: starter            # ~$7/month; 512 MB RAM, so keep workers low
+    region: oregon
+    branch: main
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 60
+    healthCheckPath: /healthz
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1              # ~$0.25/month; holds the SQLite token store
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: CLIENT_ID
+        sync: false          # Campfire -> Apps -> Manage -> View credentials
+      - key: CLIENT_SECRET
+        sync: false          # secret, shown once when the app is created
+      - key: SIGNING_SECRET
+        sync: false          # secret, Campfire -> Apps -> Manage -> Signing secret
+      - key: PUBLIC_BASE_URL
+        sync: false          # e.g. https://campfire-ceo-dashboard.onrender.com
+      - key: FLASK_SECRET
+        generateValue: true  # Render generates and keeps this
+      - key: DB_PATH
+        value: /var/data/app.sqlite3
+      - key: DEMO_MODE
+        value: "false"       # "true" shows sample data on every page

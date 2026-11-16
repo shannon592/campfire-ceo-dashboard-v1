@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}CEO Dashboard{% endblock %}
+{% block body %}
+<main class="msg">
+  <h1>CEO Dashboard for Campfire</h1>
+  <p>A read-only Campfire app with four pages: {% for key, label in PAGES %}{{ label }}{{ ", " if not loop.last }}{% endfor %}.
+     Live pages open inside Campfire under <strong>3rd Party Apps</strong>.</p>
+  <p>Scopes requested: {{ scopes | join(", ") }}.</p>
+  {% if demo_mode %}<p><strong>Demo mode is on:</strong> every page shows sample data.</p>{% endif %}
+  {% if configured %}
+    <a class="btn" href="{{ url_for('connect') }}">Connect Campfire</a>
+  {% else %}
+    <p>Not configured yet: set CLIENT_ID, CLIENT_SECRET, SIGNING_SECRET and PUBLIC_BASE_URL.</p>
+  {% endif %}
+  <a class="btn secondary" href="{{ url_for('frame', page='overview', demo=1) }}">View with sample data</a>
+</main>
+{% endblock %}

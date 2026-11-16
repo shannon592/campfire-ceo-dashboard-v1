@@ -1,0 +1,52 @@
+{% extends "_page.html" %}
+{% from "_macros.html" import tile, month_table %}
+{% block title %}Cash & Runway · CEO Dashboard{% endblock %}
+{% block heading %}Cash &amp; Runway{% endblock %}
+{% block content %}
+{% set k = m.kpi %}
+{% set flow = [] %}
+{% for b in m.series.burn %}{% set _ = flow.append(none if b is none else -b) %}{% endfor %}
+
+<section class="hero" aria-label="Cash on hand">
+  <div class="label">Cash on hand</div>
+  <div class="value">{{ k.cash | money }}</div>
+  <div class="sub">
+    {% if k.runway_months is none %}Cash grew over the last 3 months, so there's no runway limit at this pace.
+    {% else %}{{ k.runway_months | num }} months of runway at the last 3 months' average net burn of {{ k.avg_burn_3m | money }}/mo.{% endif %}
+  </div>
+</section>
+
+<div class="tiles">
+  {{ tile("Average net burn, last 3 months", k.avg_burn_3m | money, None, "Monthly decrease in cash") }}
+  {{ tile("Cash change, last 3 months", k.cash_change_3m | money, k.cash_change_3m, "vs 3 months ago", True) }}
+  {{ tile("Net income, last month", k.net_income_last | money, None, "Accrual basis, before working-capital swings") }}
+  {{ tile("AP due within 30 days", k.ap_due_30 | money, None, "Upcoming cash out") }}
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Cash balance</h2>
+    <p class="subtitle">Month-end cash and cash equivalents</p>
+    <div class="chart"><canvas id="cash" role="img" aria-label="Line chart of month-end cash balance"></canvas></div>
+  </section>
+  <section class="card">
+    <h2>Net cash flow</h2>
+    <p class="subtitle">Change in cash each month. Blue is cash in, red is net burn</p>
+    <div class="chart"><canvas id="flow" role="img" aria-label="Column chart of monthly net change in cash"></canvas></div>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Cash by month</h2>
+  {{ month_table(m.months, [("Cash", m.series.cash, "money"), ("Net cash flow", flow, "money"), ("Net income", m.series.net_income, "money")]) }}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  Dash.line("cash", DASH.months, [{ label: "Cash", data: DASH.series.cash, color: "--series-1", fill: true }]);
+  Dash.bar("flow", DASH.months.slice(1), [{
+    label: "Net cash flow",
+    data: DASH.series.burn.slice(1).map(function (b) { return -b; }),
+  }], { diverging: true });
+</script>
+{% endblock %}

@@ -1,0 +1,35 @@
+{# A KPI tile. good_when_up: True/False decides whether a positive delta is good. #}
+{% macro tile(label, value, delta=None, delta_text="", good_when_up=True) -%}
+<div class="tile">
+  <div class="label">{{ label }}</div>
+  <div class="value">{{ value }}</div>
+  {% if delta is not none %}
+    {% set good = (delta >= 0) == good_when_up %}
+    <div class="delta {{ 'good' if good else 'bad' }}">{{ '▲' if delta >= 0 else '▼' }} {{ delta_text }}</div>
+  {% elif delta_text %}
+    <div class="delta">{{ delta_text }}</div>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{# Monthly table view for a chart, so no value depends on reading a color. #}
+{% macro month_table(months, columns) -%}
+<details class="table-view">
+  <summary>Show as table</summary>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Month</th>{% for name, _, _ in columns %}<th class="n">{{ name }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for i in range(months | length) %}
+          <tr>
+            <td>{{ months[i] | month }}</td>
+            {% for _, values, kind in columns %}
+              <td class="n">{% if kind == 'pct' %}{{ values[i] | pct }}{% else %}{{ values[i] | money(False) }}{% endif %}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+{%- endmacro %}

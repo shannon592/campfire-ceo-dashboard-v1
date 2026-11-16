@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block head %}
+<script src="{{ url_for('static', filename='chart.umd.min.js') }}"></script>{# Chart.js 4.4.1, MIT, vendored #}
+<script src="{{ url_for('static', filename='charts.js') }}"></script>
+{% endblock %}
+{% block body %}
+<div class="wrap">
+  <header class="top">
+    <h1>{% block heading %}{% endblock %}</h1>
+    <span class="asof">Through {{ m.as_of }} · last 12 closed months</span>
+  </header>
+
+  <nav class="tabs" aria-label="Dashboard pages">
+    {% for key, label in PAGES %}
+      <a href="{{ url_for('frame', page=key, **nav_args) }}"{% if key == page %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  {% if m.source == "demo" %}
+    <div class="banner demo" role="status"><strong>Demo mode.</strong> These are sample numbers, not your books.</div>
+  {% endif %}
+  {% if m.warnings %}
+    <div class="banner warn" role="status">
+      <strong>Some figures may be incomplete.</strong>
+      <ul>{% for w in m.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+    </div>
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</div>
+<script>
+  window.DASH = {{ {"months": m.months, "series": m.series, "aging": m.ar_aging.keys() | list, "ar_aging": m.ar_aging.values() | list, "ap_aging": m.ap_aging.values() | list} | tojson }};
+</script>
+{% block scripts %}{% endblock %}
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · CEO Dashboard{% endblock %}
+{% block body %}
+<main class="msg">
+  <h1>{{ title }}</h1>
+  <p>{{ body }}</p>
+  {% if connect_link %}
+    {# Opens top-level: OAuth consent can't run inside Campfire's sandboxed frame. #}
+    <a class="btn" href="{{ connect_link }}" target="_blank" rel="noopener">Connect Campfire</a>
+    <p class="subtitle">After approving, reload this page.</p>
+  {% endif %}
+  {% if demo_link %}
+    <a class="btn secondary" href="{{ demo_link }}">View with sample data</a>
+  {% endif %}
+</main>
+{% endblock %}

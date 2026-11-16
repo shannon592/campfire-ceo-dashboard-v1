@@ -1,0 +1,82 @@
+{% extends "_page.html" %}
+{% from "_macros.html" import tile, month_table %}
+{% block title %}Revenue & Profitability · CEO Dashboard{% endblock %}
+{% block heading %}Revenue &amp; Profitability{% endblock %}
+{% block content %}
+{% set k = m.kpi %}
+{% set s = m.series %}
+
+<div class="tiles">
+  {{ tile("Revenue, trailing 12 months", k.revenue_ttm | money, k.revenue_growth_3m, (k.revenue_growth_3m | pct(1, True)) ~ " last 3 mo vs prior 3") }}
+  {{ tile("Revenue, last month", k.revenue_last | money, k.revenue_mom, (k.revenue_mom | pct(1, True)) ~ " vs prior month") }}
+  {{ tile("Gross margin, TTM", k.gross_margin_ttm | pct, None, "Last month " ~ (k.gross_margin_last | pct)) }}
+  {{ tile("Net margin, TTM", k.net_margin_ttm | pct, None, "Net income " ~ (k.net_income_ttm | money)) }}
+  {{ tile("Operating expenses, last month", k.opex_last | money) }}
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Monthly revenue</h2>
+    <p class="subtitle">Total revenue per month</p>
+    <div class="chart"><canvas id="revenue" role="img" aria-label="Column chart of monthly revenue"></canvas></div>
+  </section>
+  <section class="card">
+    <h2>Margins</h2>
+    <p class="subtitle">Gross margin and net margin, % of revenue</p>
+    <div class="chart"><canvas id="margins" role="img" aria-label="Line chart of gross and net margin"></canvas></div>
+  </section>
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Net income</h2>
+    <p class="subtitle">Blue is profit, red is loss</p>
+    <div class="chart"><canvas id="net-income" role="img" aria-label="Column chart of monthly net income, positive and negative"></canvas></div>
+  </section>
+  <section class="card">
+    <h2>Where revenue goes</h2>
+    <p class="subtitle">Cost of revenue and operating expenses per month</p>
+    <div class="chart"><canvas id="costs" role="img" aria-label="Line chart of cost of revenue and operating expenses"></canvas></div>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Income statement summary</h2>
+  <p class="subtitle">Last 12 closed months</p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th></th>{% for mo in m.months %}<th class="n">{{ mo | month }}</th>{% endfor %}<th class="n">TTM</th></tr>
+      </thead>
+      <tbody>
+        {% for name, values in [("Revenue", s.revenue), ("Cost of revenue", s.cogs), ("Gross profit", s.gross_profit), ("Operating expenses", s.opex), ("Net income", s.net_income)] %}
+          <tr{% if name in ("Gross profit", "Net income") %} class="total"{% endif %}>
+            <td>{{ name }}</td>
+            {% for v in values %}<td class="n">{{ v | money }}</td>{% endfor %}
+            <td class="n">{{ values | sum | money }}</td>
+          </tr>
+        {% endfor %}
+        <tr>
+          <td>Gross margin</td>
+          {% for v in s.gross_margin %}<td class="n">{{ v | pct }}</td>{% endfor %}
+          <td class="n">{{ k.gross_margin_ttm | pct }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  Dash.bar("revenue", DASH.months, [{ label: "Revenue", data: DASH.series.revenue, color: "--series-1" }]);
+  Dash.line("margins", DASH.months, [
+    { label: "Gross margin", data: DASH.series.gross_margin, color: "--series-1" },
+    { label: "Net margin", data: DASH.series.net_margin, color: "--series-2" },
+  ], { format: "pct" });
+  Dash.bar("net-income", DASH.months, [{ label: "Net income", data: DASH.series.net_income }], { diverging: true });
+  Dash.line("costs", DASH.months, [
+    { label: "Cost of revenue", data: DASH.series.cogs, color: "--series-1" },
+    { label: "Operating expenses", data: DASH.series.opex, color: "--series-2" },
+  ], { beginAtZero: true });
+</script>
+{% endblock %}

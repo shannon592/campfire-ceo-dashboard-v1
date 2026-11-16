@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Manage · CEO Dashboard{% endblock %}
+{% block body %}
+<main class="msg">
+  <h1>Manage CEO Dashboard</h1>
+  <p>This app is read-only. It requests: {{ scopes | join(", ") }}.</p>
+  {% if claims %}
+    {% if conn %}
+      <p>This workspace is connected. Access renews automatically.</p>
+      <form method="post" action="{{ url_for('disconnect') }}">
+        <input type="hidden" name="cf_ctx" value="{{ request.args.get('cf_ctx') }}">
+        <button class="btn secondary" type="submit">Delete stored access</button>
+      </form>
+    {% else %}
+      <p>This workspace isn't connected yet.</p>
+      <a class="btn" href="{{ url_for('connect', cf_ctx=request.args.get('cf_ctx')) }}" target="_blank" rel="noopener">Connect Campfire</a>
+    {% endif %}
+  {% else %}
+    <p>Open this page from Campfire to see this workspace's connection status, or connect now.</p>
+    <a class="btn" href="{{ url_for('connect') }}">Connect Campfire</a>
+  {% endif %}
+</main>
+{% endblock %}

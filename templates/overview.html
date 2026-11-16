@@ -1,0 +1,53 @@
+{% extends "_page.html" %}
+{% from "_macros.html" import tile, month_table %}
+{% block title %}Overview · CEO Dashboard{% endblock %}
+{% block heading %}Overview{% endblock %}
+{% block content %}
+{% set k = m.kpi %}
+
+<section class="hero" aria-label="Cash runway">
+  <div class="label">Cash runway</div>
+  <div class="value">
+    {% if k.runway_months is none %}Cash-flow positive{% else %}{{ k.runway_months | num }} months{% endif %}
+  </div>
+  <div class="sub">
+    {{ k.cash | money }} cash on hand ·
+    {% if k.avg_burn_3m > 0 %}{{ k.avg_burn_3m | money }}/mo average net burn (last 3 months){% else %}cash grew over the last 3 months{% endif %}
+  </div>
+</section>
+
+<div class="tiles">
+  {{ tile("Revenue, last month", k.revenue_last | money, k.revenue_mom, (k.revenue_mom | pct(1, True)) ~ " vs prior month") }}
+  {{ tile("Revenue, trailing 12 months", k.revenue_ttm | money, k.revenue_growth_3m, (k.revenue_growth_3m | pct(1, True)) ~ " last 3 mo vs prior 3") }}
+  {{ tile("Gross margin, last month", k.gross_margin_last | pct, None, "TTM " ~ (k.gross_margin_ttm | pct)) }}
+  {{ tile("Net income, last month", k.net_income_last | money, None, "TTM " ~ (k.net_income_ttm | money)) }}
+  {{ tile("Accounts receivable", k.ar_total | money, None, (k.ar_overdue | money) ~ " overdue") }}
+  {{ tile("Accounts payable", k.ap_total | money, None, (k.ap_due_30 | money) ~ " due within 30 days") }}
+</div>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Revenue vs. total expenses</h2>
+    <p class="subtitle">Monthly; expenses include cost of revenue and operating expenses</p>
+    <div class="chart"><canvas id="rev-exp" role="img" aria-label="Line chart of monthly revenue and total expenses"></canvas></div>
+    {{ month_table(m.months, [("Revenue", m.series.revenue, "money"), ("Total expenses", m.series.total_expenses, "money"), ("Net income", m.series.net_income, "money")]) }}
+  </section>
+  <section class="card">
+    <h2>Cash balance</h2>
+    <p class="subtitle">Month-end cash and cash equivalents</p>
+    <div class="chart"><canvas id="cash" role="img" aria-label="Line chart of month-end cash balance"></canvas></div>
+    {{ month_table(m.months, [("Cash", m.series.cash, "money")]) }}
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  Dash.line("rev-exp", DASH.months, [
+    { label: "Revenue", data: DASH.series.revenue, color: "--series-1" },
+    { label: "Total expenses", data: DASH.series.total_expenses, color: "--series-2" },
+  ]);
+  Dash.line("cash", DASH.months, [
+    { label: "Cash", data: DASH.series.cash, color: "--series-1", fill: true },
+  ]);
+</script>
+{% endblock %}
