@@ -476,9 +476,12 @@ def build_live_dataset(customer_id: str, today: date | None = None) -> dict:
     ca = current_assets.get(months[-1]) if current_assets else None
     cl = current_liabilities.get(months[-1]) if current_liabilities else None
     if ca is None or cl is None:
-        # Campfire's balance sheet has no current/non-current subtotals: classify accounts.
-        wc = balance_sheet.classify(collect_entries(balance_report), months[-1],
-                                    account_types(customer_id))
+        # Campfire's balance sheet has no current/non-current subtotals: classify accounts,
+        # from the structured rows (account_number / account_subtype) when present.
+        wc = balance_sheet.classify_structured(balance_report, months[-1])
+        if wc is None:
+            wc = balance_sheet.classify(collect_entries(balance_report), months[-1],
+                                        account_types(customer_id))
         if wc is not None:
             ca, cl = wc.current_assets, wc.current_liabilities
     if ca is None or cl is None:

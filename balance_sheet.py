@@ -235,3 +235,117 @@ def _cross_check(entries: list[Entry], month: str, wc: WorkingCapital) -> None:
                         e.label, e.values[month], ours)
     if wc.unclassified:
         log.warning("Balance sheet accounts not classified: %s", ", ".join(wc.unclassified))
+
+
+# --- Structured rows (the real /ca/api/get_balance_sheet shape) -------------
+#
+# The live endpoint returns {"balance_sheet": [row, ...]} where each row has
+# separate fields: account_id, account_number, account_name, account_type
+# (ASSET / LIABILITY / EQUITY), account_subtype (BANK, FIXED_ASSET, ...),
+# parent (an account_id, or a section name like "ASSET"), and period values
+# keyed "<YYYY-MM-DD>_<column>" (e.g. "2026-10-01_Total"). A parent row's value
+# is the roll-up of itself plus its children.
+
+CURRENT_SUBTYPES = {
+    "BANK", "CASH", "ACCOUNTS_RECEIVABLE", "PREPAID", "OTHER_CURRENT_ASSET", "INVENTORY",
+    "ACCOUNTS_PAYABLE", "CREDIT_CARD", "OTHER_CURRENT_LIABILITY", "DEFERRED_REVENUE",
+    "ACCRUED_LIABILITY", "ACCRUED_EXPENSES",
+}
+NONCURRENT_SUBTYPES = {
+    "FIXED_ASSET", "OTHER_ASSET", "INTANGIBLE_ASSET", "RIGHT_OF_USE_ASSET",
+    "LONG_TERM_LIABILITY", "OTHER_LIABILITY",
+}
+
+
+def structured_rows(report) -> list[dict] | None:
+    rows = report.get("balance_sheet") if isinstance(report, dict) else None
+    if not isinstance(rows, list) or not any(
+        isinstance(r, dict) and "account_subtype" in r for r in rows
+    ):
+        return None
+    return [r for r in rows if isinstance(r, dict)]
+
+
+def row_value(row: dict, month: str) -> float:
+    """Value for the period starting in `month`; prefers the "_Total" column."""
+    total, parts = None, 0.0
+    for key, val in row.items():
+        if not str(key).startswith(month) or not isinstance(val, (int, float)) or isinstance(val, bool):
+            continue
+        if str(key).lower().endswith("_total"):
+            total = float(val)
+        else:
+            parts += float(val)
+    return total if total is not None else parts
+
+
+def _term_for(number: int | None, name: str, subtype: str, side: str) -> str | None:
+    if NONCURRENT_NAME_RE.search(name):
+        return "noncurrent"
+    st = subtype.upper()
+    if st in NONCURRENT_SUBTYPES:
+        return "noncurrent"
+    if st in CURRENT_SUBTYPES:
+        return "current"
+    term = classify_by_type(st.replace("_", " "))
+    if term is None and number is not None:
+        term = classify_by_number(number, side)
+    return term
+
+
+def classify_structured(report, month: str) -> WorkingCapital | None:
+    """Current/non-current totals from the structured balance sheet, or None."""
+    rows = structured_rows(report)
+    if rows is None:
+        return None
+    accounts = [r for r in rows if r.get("account_number") not in (None, "")
+                and str(r.get("account_type", "")).upper() in {"ASSET", "LIABILITY"}]
+    ids = {str(r.get("account_id")) for r in accounts}
+    child_sum: dict[str, float] = {}
+    for r in accounts:
+        p = str(r.get("parent"))
+        if p in ids:
+            child_sum[p] = child_sum.get(p, 0.0) + row_value(r, month)
+
+    totals = {("asset", "current"): 0.0, ("asset", "noncurrent"): 0.0,
+              ("liability", "current"): 0.0, ("liability", "noncurrent"): 0.0}
+    found = {k: False for k in totals}
+    unclassified: list[str] = []
+    for r in accounts:
+        side = "asset" if str(r["account_type"]).upper() == "ASSET" else "liability"
+        name = str(r.get("account_name") or "")
+        try:
+            number = int(str(r["account_number"]).split(".")[0])
+        except ValueError:
+            number = None
+        # A parent's own balance = its roll-up minus its children's roll-ups.
+        own = row_value(r, month) - child_sum.get(str(r.get("account_id")), 0.0)
+        term = _term_for(number, name, str(r.get("account_subtype") or ""), side)
+        if term is None:
+            unclassified.append(f"{r['account_number']} - {name}")
+            continue
+        totals[(side, term)] += own
+        found[(side, term)] = True
+
+    if not (found[("asset", "current")] and found[("liability", "current")]):
+        return None
+    liab_total = totals[("liability", "current")] + totals[("liability", "noncurrent")]
+    sign = -1.0 if liab_total < 0 else 1.0
+    wc = WorkingCapital(
+        current_assets=totals[("asset", "current")],
+        current_liabilities=sign * totals[("liability", "current")],
+        noncurrent_assets=totals[("asset", "noncurrent")],
+        noncurrent_liabilities=sign * totals[("liability", "noncurrent")],
+        total_assets=totals[("asset", "current")] + totals[("asset", "noncurrent")],
+        total_liabilities=sign * liab_total,
+        unclassified=unclassified,
+    )
+    for r in rows:  # cross-check against the report's own section totals
+        if r.get("account_number") in (None, "") and str(r.get("account_name", "")).upper() in {"ASSET", "LIABILITY"}:
+            ours = wc.total_assets if r["account_name"].upper() == "ASSET" else wc.total_liabilities
+            if abs(abs(row_value(r, month)) - abs(ours)) > 1.0:
+                log.warning("Balance sheet check: %s is %.2f but classified accounts sum to %.2f",
+                            r["account_name"], row_value(r, month), ours)
+    if unclassified:
+        log.warning("Balance sheet accounts not classified: %s", ", ".join(unclassified))
+    return wc
