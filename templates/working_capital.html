@@ -8,10 +8,10 @@
 <div class="tiles">
   {{ tile("Working capital", k.working_capital | money, None, "Current assets − current liabilities") }}
   {{ tile("Current ratio", (k.current_ratio | num(2)) ~ "×", None, (k.current_assets | money) ~ " / " ~ (k.current_liabilities | money)) }}
-  {{ tile("Days sales outstanding", (k.dso | num(0)) ~ " days", None, "Open AR ÷ last 90 days' revenue") }}
-  {{ tile("Days payables outstanding", (k.dpo | num(0)) ~ " days", None, "Open AP ÷ last 90 days' spend") }}
-  {{ tile("AR overdue", k.ar_overdue | money, None, (k.ar_overdue_pct | pct(0)) ~ " of " ~ (k.ar_total | money) ~ " open") }}
-  {{ tile("AP due within 30 days", k.ap_due_30 | money, None, (k.ap_total | money) ~ " open") }}
+  {{ tile("Days sales outstanding", (k.dso | num(0)) ~ " days", None, "AR balance ÷ last 90 days' revenue") }}
+  {{ tile("Days payables outstanding", (k.dpo | num(0)) ~ " days", None, "AP balance ÷ last 90 days' spend") }}
+  {{ tile("AR overdue", k.ar_overdue | money, None, (k.ar_overdue_pct | pct(0)) ~ " of " ~ (k.ar_open | money) ~ " in open invoices") }}
+  {{ tile("AP due within 30 days", k.ap_due_30 | money, None, (k.ap_open | money) ~ " in open bills") }}
 </div>
 
 <div class="grid2">
