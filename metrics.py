@@ -62,8 +62,12 @@ def compute(data: dict) -> dict:
     cash_now = cash[-1] if cash else 0.0
     runway_months = cash_now / avg_burn if avg_burn > 0 else None
 
-    ar_total = sum(d["amount_due"] for d in data["open_invoices"])
-    ap_total = sum(d["amount_due"] for d in data["open_bills"])
+    # Open invoice/bill detail (as of today) drives aging and overdue figures.
+    ar_open = sum(d["amount_due"] for d in data["open_invoices"])
+    ap_open = sum(d["amount_due"] for d in data["open_bills"])
+    # Headline balances tie to the Balance Sheet (GL) when available.
+    ar_total = data["ar_balance"] if data.get("ar_balance") is not None else ar_open
+    ap_total = data["ap_balance"] if data.get("ap_balance") is not None else ap_open
     ar_overdue = sum(d["amount_due"] for d in data["open_invoices"] if (d.get("days_overdue") or 0) > 0)
     ap_due_30 = sum(d["amount_due"] for d in data["open_bills"] if (d.get("days_overdue") or 0) > -30)
 
@@ -106,7 +110,9 @@ def compute(data: dict) -> dict:
             "runway_months": runway_months,
             "ar_total": ar_total,
             "ar_overdue": ar_overdue,
-            "ar_overdue_pct": _safe_div(ar_overdue, ar_total),
+            "ar_overdue_pct": _safe_div(ar_overdue, ar_open),
+            "ar_open": ar_open,
+            "ap_open": ap_open,
             "ap_total": ap_total,
             "ap_due_30": ap_due_30,
             "dso": dso,
